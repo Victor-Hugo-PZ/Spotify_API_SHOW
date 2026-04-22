@@ -25,7 +25,7 @@ class SpotifyApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         
-        self.title("Meu Dashboard Musical")
+        self.title("Spotify Alfredo")
         self.geometry("1050x700")
         
         self.bg_color = "#121212"
@@ -58,7 +58,7 @@ class SpotifyApp(ctk.CTk):
         # Faz a linha 5 "empurrar" o botão de logout para o fundo
         self.sidebar_frame.grid_rowconfigure(5, weight=1) 
         
-        self.logo_label = ctk.CTkLabel(self.sidebar_frame, text="Meu Som", font=ctk.CTkFont(size=26, weight="bold"), text_color=self.accent_color)
+        self.logo_label = ctk.CTkLabel(self.sidebar_frame, text="Spotify Alfredo", font=ctk.CTkFont(size=26, weight="bold"), text_color=self.accent_color)
         self.logo_label.grid(row=0, column=0, padx=20, pady=(30, 20))
         
         self.profile_frame = ctk.CTkFrame(self.sidebar_frame, fg_color="transparent")
@@ -80,7 +80,6 @@ class SpotifyApp(ctk.CTk):
         self.btn_recentes.grid(row=4, column=0, padx=20, pady=8, sticky="ew")
         
         # Botão de Logout (Fica escondido no começo)
-        # Cor de idle levemente vermelha (#2A1010)
         self.logout_btn = ctk.CTkButton(self.sidebar_frame, text="Sair da Conta", command=self.fazer_logout, fg_color="#2A1010", text_color="#FF4B4B", hover_color="#441010", font=ctk.CTkFont(size=13), corner_radius=8)
         self.logout_btn.grid(row=6, column=0, pady=20)
         self.logout_btn.grid_remove() # Esconde até estar logado
@@ -154,34 +153,43 @@ class SpotifyApp(ctk.CTk):
             
             def carregar_foto_perfil():
                 try:
+                    # 1. Baixa a imagem
                     resposta = requests.get(url_foto, timeout=5)
                     img_pillow = Image.open(BytesIO(resposta.content)).convert("RGBA")
                     
+                    # 2. Prepara o corte quadrado (100x100)
                     largura, altura = img_pillow.size
                     tamanho = min(largura, altura)
                     img_cortada = img_pillow.crop(((largura - tamanho)/2, (altura - tamanho)/2, (largura + tamanho)/2, (altura + tamanho)/2)).resize((100, 100))
                     
                     # --- ARREDONDAR CANTOS DA IMAGEM E ADICIONAR BORDA VIA PIL ---
-                    from PIL import ImageDraw, ImageOps
+                    from PIL import ImageDraw
                     
-                    # 1. Cria a máscara para o arredondamento
+                    # 3. Cria a máscara para o arredondamento (um pouco menor que a borda)
                     mask = Image.new('L', (100, 100), 0)
-                    draw = ImageDraw.Draw(mask)
-                    draw.rounded_rectangle((0, 0, 100, 100), radius=15, fill=255)
+                    draw_mask = ImageDraw.Draw(mask)
+                    # Arredondamento da foto (radius 14 para ficar dentro da borda de radius 15)
+                    draw_mask.rounded_rectangle((2, 2, 97, 97), radius=14, fill=255)
                     
-                    # 2. Aplica o arredondamento na foto
+                    # 4. Aplica o arredondamento na foto
                     img_arredondada = Image.new('RGBA', (100, 100), (0, 0, 0, 0))
                     img_arredondada.paste(img_cortada, (0, 0), mask=mask)
                     
-                    # 3. Adiciona a borda branca fina (desenhando um retângulo arredondado por cima)
+                    # 5. Adiciona a borda branca fina por cima de tudo
                     draw_border = ImageDraw.Draw(img_arredondada)
                     # outline=white, width=2 (borda fina)
-                    draw_border.rounded_rectangle((0, 0, 99, 99), radius=15, outline="white", width=2)
+                    # Usamos 1,1 a 98,98 para garantir que a borda não seja cortada
+                    draw_border.rounded_rectangle((1, 1, 98, 98), radius=15, outline="#F2F0EF", width=2)
                     
-                    # Cria a imagem do CTK
+                    # 6. Cria a imagem do CTK
                     self.img_perfil_ctk = ctk.CTkImage(light_image=img_arredondada, dark_image=img_arredondada, size=(100, 100))
-                    # Referência global para evitar Garbage Collection
-                    self.after(0, lambda: self.lbl_foto_perfil.configure(image=self.img_perfil_ctk))
+                    
+                    # 7. Atualiza a UI na thread principal
+                    def atualizar_ui():
+                        if hasattr(self, 'lbl_foto_perfil') and self.lbl_foto_perfil.winfo_exists():
+                            self.lbl_foto_perfil.configure(image=self.img_perfil_ctk)
+                    
+                    self.after(0, atualizar_ui)
                 except Exception as e:
                     print(f"Erro ao carregar foto: {e}")
             
@@ -391,7 +399,7 @@ class SpotifyApp(ctk.CTk):
                 
                 # Popularidade pode não vir em todos os tipos de objetos da API
                 pop = track.get('popularity', 0)
-                estatistica_inicial = f"Pop: {pop}"
+                estatistica_inicial = f"Streams: {pop}"
                 
                 # Cria o card e pega a referência do label de stats
                 lbl_stats, _ = self.criar_card(i + 1, track.get('name', 'Música'), track['artists'][0]['name'] if track.get('artists') else 'Artista', url_capa, estatistica_inicial)

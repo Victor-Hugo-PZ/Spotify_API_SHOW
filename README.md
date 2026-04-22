@@ -1,4 +1,4 @@
-# Spotify API SHOW - Dashboard Musical
+# Spotify Alfredo - Dashboard Musical
 
 Um dashboard elegante e moderno construído com Python para visualizar suas estatísticas do Spotify em tempo real.
 
@@ -45,7 +45,7 @@ Antes de começar, você precisará:
 
 Basta executar o arquivo principal:
 ```bash
-python meu_spotify.py
+python app.py
 ```
 
 ## 🎨 Personalização Visual
