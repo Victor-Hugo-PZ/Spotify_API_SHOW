@@ -1,4 +1,5 @@
 .env
 .cache
+test_gemini.py
 __pycache__/
 *.pyc

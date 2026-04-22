@@ -1,13 +1,13 @@
-import customtkinter as ctk
+import os
+import threading
+import requests
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 from PIL import Image, ImageDraw
-import requests
 from io import BytesIO
-import os  # Adicionado para podermos deletar o cache no Logout
+import customtkinter as ctk
 from dotenv import load_dotenv
-import threading
-import google.generativeai as genai
+from google import genai
 
 # --- 1. CONFIGURAÇÕES VISUAIS ---
 ctk.set_appearance_mode("Dark")
@@ -37,10 +37,10 @@ class SpotifyApp(ctk.CTk):
         # --- CONFIGURAÇÃO GEMINI ---
         self.gemini_key = os.getenv('GEMINI_API_KEY')
         if self.gemini_key:
-            genai.configure(api_key=self.gemini_key)
-            self.model = genai.GenerativeModel('gemini-1.5-flash')
+            # Usando o novo SDK google-genai
+            self.gemini_client = genai.Client(api_key=self.gemini_key)
         else:
-            self.model = None
+            self.gemini_client = None
         
         self.configure(fg_color=self.bg_color)
         
@@ -289,97 +289,210 @@ class SpotifyApp(ctk.CTk):
         self.aba_atual = "alfredo"
         self.time_frame.pack_forget() # Oculta os botões de tempo
         self.destacar_botao_ativo(self.btn_alfredo)
-        self.title_label.configure(text="Conversar com Alfredo")
+        self.title_label.configure(text="Alfredo (IA) - Seu Assistente Musical")
         self.limpar_scroll_area()
         
-        # Container do Chat
-        self.chat_container = ctk.CTkFrame(self.scroll_area, fg_color="transparent")
-        self.chat_container.pack(fill="both", expand=True, padx=10, pady=10)
+        # Container Principal do Alfredo
+        self.alfredo_container = ctk.CTkFrame(self.scroll_area, fg_color="transparent")
+        self.alfredo_container.pack(fill="both", expand=True, padx=10, pady=10)
         
-        # Área de mensagens (Scrollable)
-        self.chat_box = ctk.CTkTextbox(self.chat_container, fg_color="#121212", text_color="#FFFFFF", font=ctk.CTkFont(size=14), corner_radius=10, border_width=1, border_color="#333333")
-        self.chat_box.pack(fill="both", expand=True, pady=(0, 15))
-        self.chat_box.configure(state="disabled") # Somente leitura inicialmente
+        # Frame de Botões de Ação no topo
+        self.acoes_frame = ctk.CTkFrame(self.alfredo_container, fg_color="transparent")
+        self.acoes_frame.pack(fill="x", pady=(0, 20))
         
-        # Input de texto
-        self.input_frame = ctk.CTkFrame(self.chat_container, fg_color="transparent")
-        self.input_frame.pack(fill="x")
+        btn_font = ctk.CTkFont(size=13, weight="bold")
         
-        self.chat_input = ctk.CTkEntry(self.input_frame, placeholder_text="Pergunte ao Alfredo sobre seu gosto musical...", height=45, font=ctk.CTkFont(size=14), corner_radius=22, border_width=1, border_color="#404040", fg_color="#181818")
-        self.chat_input.pack(side="left", fill="x", expand=True, padx=(0, 10))
-        self.chat_input.bind("<Return>", lambda e: self.enviar_pergunta_alfredo())
+        self.btn_evolucao = ctk.CTkButton(
+            self.acoes_frame, 
+            text="Analisar Minha Evolução Musical", 
+            height=45, 
+            font=btn_font, 
+            corner_radius=22, 
+            fg_color="#282828", 
+            hover_color="#333333",
+            command=lambda: self.solicitar_analise_alfredo("evolucao")
+        )
+        self.btn_evolucao.pack(side="left", fill="x", expand=True, padx=(0, 10))
         
-        self.send_btn = ctk.CTkButton(self.input_frame, text="Enviar", width=80, height=45, corner_radius=22, fg_color=self.accent_color, text_color="#000000", font=ctk.CTkFont(size=14, weight="bold"), command=self.enviar_pergunta_alfredo)
-        self.send_btn.pack(side="right")
+        self.btn_recomendacao = ctk.CTkButton(
+            self.acoes_frame, 
+            text="Recomendações Personalizadas", 
+            height=45, 
+            font=btn_font, 
+            corner_radius=22, 
+            fg_color=self.accent_color, 
+            text_color="#000000",
+            hover_color="#1DB954",
+            command=lambda: self.solicitar_analise_alfredo("recomendacao")
+        )
+        self.btn_recomendacao.pack(side="left", fill="x", expand=True)
 
-        # Mensagem inicial de boas-vindas do Alfredo
-        self.adicionar_mensagem_chat("Alfredo", "Olá! Sou o Alfredo, seu assistente musical. Estou analisando seu histórico para conversarmos. Como posso te ajudar hoje?")
+        # Área de Conteúdo (Onde aparecerá o texto e os cards)
+        self.conteudo_alfredo = ctk.CTkFrame(self.alfredo_container, fg_color="transparent")
+        self.conteudo_alfredo.pack(fill="both", expand=True)
 
-    def adicionar_mensagem_chat(self, autor, mensagem):
-        self.chat_box.configure(state="normal")
-        tag = f"\n[{autor}]: "
-        self.chat_box.insert("end", tag)
-        self.chat_box.insert("end", f"{mensagem}\n")
-        self.chat_box.see("end")
-        self.chat_box.configure(state="disabled")
+        # Mensagem inicial amigável
+        self.msg_inicial = ctk.CTkLabel(
+            self.conteudo_alfredo, 
+            text="Olá! Sou o Alfredo.\nEscolha uma das opções acima para eu analisar seu perfil musical!",
+            font=ctk.CTkFont(size=16),
+            text_color="#B3B3B3",
+            pady=40
+        )
+        self.msg_inicial.pack()
 
-    def enviar_pergunta_alfredo(self):
-        pergunta = self.chat_input.get().strip()
-        if not pergunta:
+    def solicitar_analise_alfredo(self, tipo):
+        if not self.gemini_client:
+            self.limpar_conteudo_alfredo()
+            lbl = ctk.CTkLabel(self.conteudo_alfredo, text="Ops! Chave Gemini não configurada no .env.", text_color="#FF4444")
+            lbl.pack(pady=20)
             return
-            
-        self.chat_input.delete(0, "end")
-        self.adicionar_mensagem_chat("Você", pergunta)
+
+        # Limpa e mostra que está carregando
+        self.limpar_conteudo_alfredo()
+        self.loading_label = ctk.CTkLabel(self.conteudo_alfredo, text="Alfredo está analisando seus dados... 🎧", font=ctk.CTkFont(size=16, weight="bold"))
+        self.loading_label.pack(pady=40)
         
-        if not self.model:
-            self.adicionar_mensagem_chat("Alfredo", "Ops! Minha chave de API (Gemini) não foi configurada no arquivo .env. Peça para o mestre configurar GEMINI_API_KEY.")
-            return
+        threading.Thread(target=self.processar_resposta_alfredo, args=(tipo,), daemon=True).start()
 
-        # Rodar a análise em uma thread para não travar a UI
-        threading.Thread(target=self.processar_resposta_alfredo, args=(pergunta,), daemon=True).start()
+    def limpar_conteudo_alfredo(self):
+        for widget in self.conteudo_alfredo.winfo_children():
+            widget.destroy()
 
-    def processar_resposta_alfredo(self, pergunta):
+    def processar_resposta_alfredo(self, tipo):
         try:
-            # 1. Coletar dados do Spotify para o contexto (Top artistas e músicas de diferentes períodos)
-            top_artistas_short = self.sp.current_user_top_artists(limit=10, time_range='short_term')['items']
-            top_artistas_med = self.sp.current_user_top_artists(limit=10, time_range='medium_term')['items']
-            top_artistas_long = self.sp.current_user_top_artists(limit=10, time_range='long_term')['items']
+            # 1. Coletar dados do Spotify
+            top_artistas_short = self.sp.current_user_top_artists(limit=15, time_range='short_term')['items']
+            top_artistas_med = self.sp.current_user_top_artists(limit=15, time_range='medium_term')['items']
+            top_artistas_long = self.sp.current_user_top_artists(limit=15, time_range='long_term')['items']
             
-            top_tracks_short = self.sp.current_user_top_tracks(limit=10, time_range='short_term')['items']
-            top_tracks_med = self.sp.current_user_top_tracks(limit=10, time_range='medium_term')['items']
-            top_tracks_long = self.sp.current_user_top_tracks(limit=10, time_range='long_term')['items']
+            top_tracks_short = self.sp.current_user_top_tracks(limit=15, time_range='short_term')['items']
+            top_tracks_med = self.sp.current_user_top_tracks(limit=15, time_range='medium_term')['items']
+            top_tracks_long = self.sp.current_user_top_tracks(limit=15, time_range='long_term')['items']
 
-            # 2. Formatar o contexto para a IA
+            # 2. Prompt focado em extrair texto e sugestões separadas
+            if tipo == "evolucao":
+                instrucao = """
+                Analise a evolução do gosto musical do usuário. 
+                A análise deve ser divertida e inteligente, curta e de fácil compreensão.
+                Podendo conter informações sobre o usuário, como suas preferências musicais, suas mudanças no tempo, etc.
+                Sua resposta DEVE seguir este formato exato:
+                TEXTO: [Sua análise divertida e inteligente aqui]
+                SUGESTOES: [Artista 1], [Artista 2], [Artista 3]
+                SUGESTOES: [Música 1], [Música 2], [Música 3]
+                """
+            else:
+                instrucao = """
+                Recomende 3 bandas e 3 músicas.
+                De um breve motivo do qual o usuario receber essas recomendações.
+                Sua resposta DEVE seguir este formato exato:
+                TEXTO: [Sua explicação de curador de elite aqui]
+                SUGESTOES: [Artista 1], [Artista 2], [Artista 3]
+                SUGESTOES: [Música 1], [Música 2], [Música 3]                """
+
             contexto = f"""
-            Você é o Alfredo, um assistente de música inteligente e amigável.
-            Aqui está o histórico musical do usuário:
+            Você é o Alfredo, um assistente de música inteligente.
+            {instrucao}
             
-            ÚLTIMO MÊS (Short Term):
-            - Artistas: {', '.join([a['name'] for a in top_artistas_short])}
-            - Músicas: {', '.join([t['name'] for t in top_tracks_short])}
-            
-            ÚLTIMOS 6 MESES (Medium Term):
-            - Artistas: {', '.join([a['name'] for a in top_artistas_med])}
-            - Músicas: {', '.join([t['name'] for t in top_tracks_med])}
-            
-            TODO O TEMPO (Long Term):
-            - Artistas: {', '.join([a['name'] for a in top_artistas_long])}
-            - Músicas: {', '.join([t['name'] for t in top_tracks_long])}
-            
-            Tarefa: Analise a evolução musical do usuário, compare os períodos e responda à pergunta dele.
-            Seja direto, divertido e dê sugestões baseadas nesse gosto. Use um tom de especialista em música.
-            Pergunta do usuário: {pergunta}
+            DADOS:
+            ÚLTIMO MÊS: {', '.join([a['name'] for a in top_artistas_short])}
+            ÚLTIMOS 6 MESES: {', '.join([a['name'] for a in top_artistas_med])}
+            TODO O TEMPO: {', '.join([a['name'] for a in top_artistas_long])}
             """
             
-            # 3. Chamar o Gemini
-            response = self.model.generate_content(contexto)
-            resposta_texto = response.text
+            modelos_tentar = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.0-flash']
+            resposta_bruta = None
             
-            # 4. Mostrar na UI
-            self.after(0, lambda: self.adicionar_mensagem_chat("Alfredo", resposta_texto))
+            for modelo in modelos_tentar:
+                try:
+                    response = self.gemini_client.models.generate_content(model=modelo, contents=contexto)
+                    resposta_bruta = response.text
+                    if resposta_bruta: break
+                except: continue
+
+            if not resposta_bruta:
+                raise Exception("Serviço temporariamente indisponível.")
+
+            # 3. Parsear a resposta
+            texto_analise = ""
+            sugestoes = []
+            
+            if "TEXTO:" in resposta_bruta and "SUGESTOES:" in resposta_bruta:
+                partes = resposta_bruta.split("SUGESTOES:")
+                texto_analise = partes[0].replace("TEXTO:", "").strip()
+                sugestoes = [s.strip() for s in partes[1].split(",") if s.strip()]
+            else:
+                texto_analise = resposta_bruta
+
+            # 4. Atualizar UI de forma segura
+            self.after(0, lambda: self.renderizar_resultado_alfredo(texto_analise, sugestoes))
             
         except Exception as e:
-            self.after(0, lambda: self.adicionar_mensagem_chat("Alfredo", f"Desculpe, tive um problema ao analisar seus dados: {str(e)}"))
+            self.after(0, lambda: self.renderizar_erro_alfredo(str(e)))
+
+    def renderizar_resultado_alfredo(self, texto, sugestoes):
+        self.limpar_conteudo_alfredo()
+        
+        # Texto da Análise
+        lbl_texto = ctk.CTkLabel(
+            self.conteudo_alfredo, 
+            text=texto, 
+            font=ctk.CTkFont(size=14), 
+            wraplength=700, 
+            justify="left"
+        )
+        lbl_texto.pack(fill="x", pady=(0, 20), padx=10)
+        
+        # Se houver sugestões, tenta buscar e criar cards
+        if sugestoes:
+            lbl_tit_sug = ctk.CTkLabel(self.conteudo_alfredo, text="SUGESTÕES DO ALFREDO:", font=ctk.CTkFont(size=16, weight="bold"), text_color=self.accent_color)
+            lbl_tit_sug.pack(pady=(10, 10))
+            
+            for i, item in enumerate(sugestoes[:3]):
+                # Busca rápida no Spotify para pegar imagem e info
+                try:
+                    resultado = self.sp.search(q=item, limit=1, type='track,artist')
+                    
+                    # Tenta pegar como música primeiro
+                    if resultado['tracks']['items']:
+                        track = resultado['tracks']['items'][0]
+                        self.criar_card_simples(i+1, track['name'], track['artists'][0]['name'], track['album']['images'][0]['url'] if track['album']['images'] else None)
+                    elif resultado['artists']['items']:
+                        artist = resultado['artists']['items'][0]
+                        self.criar_card_simples(i+1, artist['name'], "Artista Sugerido", artist['images'][0]['url'] if artist['images'] else None)
+                except:
+                    # Se falhar a busca, cria card apenas com texto
+                    self.criar_card_simples(i+1, item, "Sugestão", None)
+
+    def criar_card_simples(self, numero, titulo, subtitulo, url_imagem):
+        card = ctk.CTkFrame(self.conteudo_alfredo, fg_color=self.card_color, corner_radius=8)
+        card.pack(fill="x", pady=5, padx=5)
+        
+        ctk.CTkLabel(card, text=f"#{numero}", font=ctk.CTkFont(size=16, weight="bold"), text_color=self.accent_color, width=40).pack(side="left", padx=10)
+        
+        # Imagem (simplificada para o card do Alfredo)
+        lbl_img = ctk.CTkLabel(card, text="", width=40, height=40)
+        lbl_img.pack(side="left", padx=5)
+        
+        if url_imagem:
+            def carregar():
+                try:
+                    res = requests.get(url_imagem, timeout=3)
+                    img = Image.open(BytesIO(res.content)).resize((40, 40))
+                    ctk_img = ctk.CTkImage(img, size=(40, 40))
+                    self.after(0, lambda: lbl_img.configure(image=ctk_img))
+                except: pass
+            threading.Thread(target=carregar, daemon=True).start()
+            
+        txt_frame = ctk.CTkFrame(card, fg_color="transparent")
+        txt_frame.pack(side="left", fill="x", expand=True, padx=10)
+        ctk.CTkLabel(txt_frame, text=titulo[:40], font=ctk.CTkFont(size=14, weight="bold"), anchor="w").pack(fill="x")
+        ctk.CTkLabel(txt_frame, text=subtitulo[:40], font=ctk.CTkFont(size=12), text_color="#B3B3B3", anchor="w").pack(fill="x")
+
+    def renderizar_erro_alfredo(self, erro):
+        self.limpar_conteudo_alfredo()
+        msg = "O sistema está sobrecarregado. Tente novamente!" if "503" in erro else f"Erro: {erro}"
+        ctk.CTkLabel(self.conteudo_alfredo, text=msg, text_color="#FF4444", font=ctk.CTkFont(size=14)).pack(pady=20)
 
     def limpar_scroll_area(self):
         for widget in self.scroll_area.winfo_children():
