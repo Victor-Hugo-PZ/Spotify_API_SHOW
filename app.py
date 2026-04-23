@@ -90,7 +90,7 @@ class SpotifyApp(ctk.CTk):
         self.btn_recentes = ctk.CTkButton(self.sidebar_frame, text="Últimas Ouvidas", command=self.mostrar_recentes, state="disabled", fg_color="transparent", text_color="#FFFFFF", hover_color="#282828", font=btn_font, corner_radius=8, height=40)
         self.btn_recentes.grid(row=4, column=0, padx=20, pady=8, sticky="ew")
         
-        self.btn_alfredo = ctk.CTkButton(self.sidebar_frame, text="Alfredo (IA)", command=self.mostrar_alfredo, state="disabled", fg_color="transparent", text_color="#FFFFFF", hover_color="#282828", font=btn_font, corner_radius=8, height=40)
+        self.btn_alfredo = ctk.CTkButton(self.sidebar_frame, text="Al.fredo", command=self.mostrar_alfredo, state="disabled", fg_color="transparent", text_color="#FFFFFF", hover_color="#282828", font=btn_font, corner_radius=8, height=40)
         self.btn_alfredo.grid(row=5, column=0, padx=20, pady=8, sticky="ew")
         
         # Botão de Logout (Fica escondido no começo)
@@ -173,15 +173,20 @@ class SpotifyApp(ctk.CTk):
         self.limpar_scroll_area()
 
     def atualizar_ui_logado(self):
-        self.login_btn.pack_forget()
-        
-        nome = self.user_info['display_name']
+        # Limpa o frame de perfil para garantir que não haja duplicatas
+        for widget in self.profile_frame.winfo_children():
+            widget.destroy()
+            
+        if not self.user_info:
+            return
+            
+        nome = self.user_info.get('display_name', 'Usuário')
         lbl_nome = ctk.CTkLabel(self.profile_frame, text=nome, font=ctk.CTkFont(weight="bold", size=16))
         
-        if len(self.user_info['images']) > 0:
+        if self.user_info.get('images') and len(self.user_info['images']) > 0:
             url_foto = self.user_info['images'][0]['url']
             
-            # Label para a foto (Sem borda acinzentada, a imagem será arredondada via PIL)
+            # Label para a foto
             self.lbl_foto_perfil = ctk.CTkLabel(self.profile_frame, text="", width=100, height=100, fg_color="transparent")
             self.lbl_foto_perfil.pack(pady=(0, 10))
             
@@ -189,38 +194,26 @@ class SpotifyApp(ctk.CTk):
             
             def carregar_foto_perfil():
                 try:
-                    # 1. Baixa a imagem
                     resposta = requests.get(url_foto, timeout=5)
                     img_pillow = Image.open(BytesIO(resposta.content)).convert("RGBA")
                     
-                    # 2. Prepara o corte quadrado (100x100)
                     largura, altura = img_pillow.size
                     tamanho = min(largura, altura)
                     img_cortada = img_pillow.crop(((largura - tamanho)/2, (altura - tamanho)/2, (largura + tamanho)/2, (altura + tamanho)/2)).resize((100, 100))
                     
-                    # --- ARREDONDAR CANTOS DA IMAGEM E ADICIONAR BORDA VIA PIL ---
-                    from PIL import ImageDraw
-                    
-                    # 3. Cria a máscara para o arredondamento (um pouco menor que a borda)
+                    # Arredondar via PIL
                     mask = Image.new('L', (100, 100), 0)
                     draw_mask = ImageDraw.Draw(mask)
-                    # Arredondamento da foto (radius 14 para ficar dentro da borda de radius 15)
                     draw_mask.rounded_rectangle((2, 2, 97, 97), radius=14, fill=255)
                     
-                    # 4. Aplica o arredondamento na foto
                     img_arredondada = Image.new('RGBA', (100, 100), (0, 0, 0, 0))
                     img_arredondada.paste(img_cortada, (0, 0), mask=mask)
                     
-                    # 5. Adiciona a borda branca fina por cima de tudo
                     draw_border = ImageDraw.Draw(img_arredondada)
-                    # outline=white, width=2 (borda fina)
-                    # Usamos 1,1 a 98,98 para garantir que a borda não seja cortada
                     draw_border.rounded_rectangle((1, 1, 98, 98), radius=15, outline="#F2F0EF", width=2)
                     
-                    # 6. Cria a imagem do CTK
                     self.img_perfil_ctk = ctk.CTkImage(light_image=img_arredondada, dark_image=img_arredondada, size=(100, 100))
                     
-                    # 7. Atualiza a UI na thread principal
                     def atualizar_ui():
                         if hasattr(self, 'lbl_foto_perfil') and self.lbl_foto_perfil.winfo_exists():
                             self.lbl_foto_perfil.configure(image=self.img_perfil_ctk)
@@ -238,7 +231,7 @@ class SpotifyApp(ctk.CTk):
         self.btn_recentes.configure(state="normal")
         self.btn_alfredo.configure(state="normal")
         
-        self.logout_btn.grid() # Mostra o botão de logout
+        self.logout_btn.grid() 
         self.logout_btn.configure(fg_color="#2A1010", text_color="#FF4B4B", hover_color="#441010")
         self.mostrar_recentes()
 
@@ -437,21 +430,35 @@ class SpotifyApp(ctk.CTk):
     def renderizar_resultado_alfredo(self, texto, musicas, artistas):
         self.limpar_conteudo_alfredo()
         
-        # Frame de Texto - Mais curto e legível
-        texto_frame = ctk.CTkFrame(self.conteudo_alfredo, fg_color="#181818", corner_radius=12, border_width=1, border_color="#333333")
-        texto_frame.pack(fill="x", pady=(0, 20), padx=20)
+        # Frame de Texto - Com bordas suaves e padding interno para evitar cortes
+        texto_frame = ctk.CTkFrame(
+            self.conteudo_alfredo, 
+            fg_color="#181818", 
+            corner_radius=15, # Leve arredondamento elegante
+            border_width=1, 
+            border_color="#333333"
+        )
+        texto_frame.pack(fill="x", pady=(0, 25), padx=20)
 
         self.lbl_texto_alfredo = ctk.CTkLabel(
             texto_frame, 
             text=texto, 
             font=ctk.CTkFont(size=14), 
-            wraplength=700,
             justify="left",
-            padx=20,
-            pady=20,
+            padx=30, # Aumentado para dar mais "ar" ao texto
+            pady=30,
             text_color="#EBEBEB"
         )
         self.lbl_texto_alfredo.pack(fill="x")
+        
+        # Função para ajustar o wraplength dinamicamente e evitar que o texto encoste nas bordas
+        def ajustar_texto(event):
+            # Deixa uma margem de segurança para o wraplength (largura do frame - paddings)
+            novo_wrap = event.width - 80 
+            if novo_wrap > 100:
+                self.lbl_texto_alfredo.configure(wraplength=novo_wrap)
+        
+        texto_frame.bind("<Configure>", ajustar_texto)
         
         # Container de Duas Colunas
         colunas_container = ctk.CTkFrame(self.conteudo_alfredo, fg_color="transparent")
@@ -479,12 +486,12 @@ class SpotifyApp(ctk.CTk):
         card.pack(fill="x", pady=5)
         card.pack_propagate(False)
         
-        # Placeholder para imagem
-        lbl_img = ctk.CTkLabel(card, text="", width=60, height=60)
-        lbl_img.pack(side="left", padx=10, pady=10)
+        # Imagem ocupando toda a altura do card (80px), com margem à esquerda para um visual limpo
+        lbl_img = ctk.CTkLabel(card, text="", width=80, height=80)
+        lbl_img.pack(side="left", padx=(12, 0)) 
         
         info_frame = ctk.CTkFrame(card, fg_color="transparent")
-        info_frame.pack(side="left", fill="both", expand=True, pady=15)
+        info_frame.pack(side="left", fill="both", expand=True, padx=15, pady=15)
         
         lbl_titulo = ctk.CTkLabel(info_frame, text=nome[:30], font=ctk.CTkFont(size=13, weight="bold"), anchor="w")
         lbl_titulo.pack(fill="x")
@@ -519,12 +526,12 @@ class SpotifyApp(ctk.CTk):
                         r = requests.get(url_img, timeout=5)
                         img_raw = Image.open(BytesIO(r.content)).convert("RGBA")
                         
-                        # Corte quadrado (PIL)
+                        # Corte quadrado (PIL) para 80x80
                         w, h = img_raw.size
                         size = min(w, h)
-                        img_crop = img_raw.crop(((w-size)/2, (h-size)/2, (w+size)/2, (h+size)/2)).resize((60, 60))
+                        img_crop = img_raw.crop(((w-size)/2, (h-size)/2, (w+size)/2, (h+size)/2)).resize((80, 80))
                         
-                        ctk_img = ctk.CTkImage(img_crop, size=(60, 60))
+                        ctk_img = ctk.CTkImage(img_crop, size=(80, 80))
                         self.after(0, lambda: lbl_img.configure(image=ctk_img))
                 else:
                     self.after(0, lambda: lbl_sub.configure(text="Não encontrado"))
