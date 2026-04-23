@@ -350,7 +350,7 @@ class SpotifyApp(ctk.CTk):
 
         # Limpa e mostra que está carregando
         self.limpar_conteudo_alfredo()
-        self.loading_label = ctk.CTkLabel(self.conteudo_alfredo, text="Alfredo está analisando seus dados... 🎧", font=ctk.CTkFont(size=16, weight="bold"))
+        self.loading_label = ctk.CTkLabel(self.conteudo_alfredo, text="Alfredo está analisando seus dados...", font=ctk.CTkFont(size=16, weight="bold"))
         self.loading_label.pack(pady=40)
         
         threading.Thread(target=self.processar_resposta_alfredo, args=(tipo,), daemon=True).start()
@@ -370,37 +370,32 @@ class SpotifyApp(ctk.CTk):
             top_tracks_med = self.sp.current_user_top_tracks(limit=15, time_range='medium_term')['items']
             top_tracks_long = self.sp.current_user_top_tracks(limit=15, time_range='long_term')['items']
 
-            # 2. Prompt focado em extrair texto e sugestões separadas
+            # 2. Prompt focado em extrair texto, músicas e artistas separadamente
             if tipo == "evolucao":
                 instrucao = """
-                Analise a evolução do gosto musical do usuário. 
-                A análise deve ser divertida e inteligente, curta e de fácil compreensão.
-                Podendo conter informações sobre o usuário, como suas preferências musicais, suas mudanças no tempo, etc.
-                Sua resposta DEVE seguir este formato exato:
-                TEXTO: [Sua análise divertida e inteligente aqui]
-                SUGESTOES: [Artista 1], [Artista 2], [Artista 3]
-                SUGESTOES: [Música 1], [Música 2], [Música 3]
+                Analise a evolução musical do usuário de forma CURTA e DIRETA (máximo 3 frases).
+                Use este formato EXATO:
+                TEXTO: [Sua análise curta]
+                MUSICAS: [Musica 1], [Musica 2], [Musica 3]
+                ARTISTAS: [Artista 1], [Artista 2], [Artista 3]
                 """
             else:
                 instrucao = """
-                Recomende 3 bandas e 3 músicas.
-                De um breve motivo do qual o usuario receber essas recomendações.
-                Sua resposta DEVE seguir este formato exato:
-                TEXTO: [Sua explicação de curador de elite aqui]
-                SUGESTOES: [Artista 1], [Artista 2], [Artista 3]
-                SUGESTOES: [Música 1], [Música 2], [Música 3]                """
+                Recomende 3 bandas e 3 músicas baseadas no gosto atual. Seja CURTO (máximo 3 frases).
+                Use este formato EXATO:
+                TEXTO: [Sua explicação curta]
+                MUSICAS: [Nome da Música 1], [Nome da Música 2], [Nome da Música 3]
+                ARTISTAS: [Nome da Banda ou Artista 1], [Nome da Banda ou Artista 2], [Nome da Banda ou Artista 3]
+                """
 
             contexto = f"""
-            Você é o Alfredo, um assistente de música inteligente.
+            Você é o Alfredo, assistente musical de elite. Seja conciso.
             {instrucao}
             
-            DADOS:
-            ÚLTIMO MÊS: {', '.join([a['name'] for a in top_artistas_short])}
-            ÚLTIMOS 6 MESES: {', '.join([a['name'] for a in top_artistas_med])}
-            TODO O TEMPO: {', '.join([a['name'] for a in top_artistas_long])}
+            DADOS RECENTES: {', '.join([a['name'] for a in top_artistas_short])}
             """
             
-            modelos_tentar = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.0-flash']
+            modelos_tentar = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
             resposta_bruta = None
             
             for modelo in modelos_tentar:
@@ -413,81 +408,130 @@ class SpotifyApp(ctk.CTk):
             if not resposta_bruta:
                 raise Exception("Serviço temporariamente indisponível.")
 
-            # 3. Parsear a resposta
+            # 3. Parsear a resposta de forma mais flexível
             texto_analise = ""
-            sugestoes = []
+            musicas_sugeridas = []
+            artistas_sugeridos = []
             
-            if "TEXTO:" in resposta_bruta and "SUGESTOES:" in resposta_bruta:
-                partes = resposta_bruta.split("SUGESTOES:")
-                texto_analise = partes[0].replace("TEXTO:", "").strip()
-                sugestoes = [s.strip() for s in partes[1].split(",") if s.strip()]
-            else:
+            import re
+            
+            # Tenta encontrar as seções independentemente da ordem ou de labels "TEXT" vs "TEXTO"
+            m_texto = re.search(r"TEXT(?:O)?:?\s*(.*?)(?=MUSICAS:|ARTISTAS:|$)", resposta_bruta, re.S | re.I)
+            m_musicas = re.search(r"MUSICAS:?\s*(.*?)(?=TEXTO:|TEXT:|ARTISTAS:|$)", resposta_bruta, re.S | re.I)
+            m_artistas = re.search(r"ARTISTAS:?\s*(.*?)(?=TEXTO:|TEXT:|MUSICAS:|$)", resposta_bruta, re.S | re.I)
+
+            if m_texto: texto_analise = m_texto.group(1).strip()
+            if m_musicas: musicas_sugeridas = [m.strip() for m in m_musicas.group(1).split(",") if m.strip()]
+            if m_artistas: artistas_sugeridos = [a.strip() for a in m_artistas.group(1).split(",") if a.strip()]
+
+            # Fallback se falhar o regex
+            if not texto_analise and not musicas_sugeridas:
                 texto_analise = resposta_bruta
 
             # 4. Atualizar UI de forma segura
-            self.after(0, lambda: self.renderizar_resultado_alfredo(texto_analise, sugestoes))
+            self.after(0, lambda: self.renderizar_resultado_alfredo(texto_analise, musicas_sugeridas, artistas_sugeridos))
             
         except Exception as e:
             self.after(0, lambda: self.renderizar_erro_alfredo(str(e)))
 
-    def renderizar_resultado_alfredo(self, texto, sugestoes):
+    def renderizar_resultado_alfredo(self, texto, musicas, artistas):
         self.limpar_conteudo_alfredo()
         
-        # Texto da Análise
-        lbl_texto = ctk.CTkLabel(
-            self.conteudo_alfredo, 
+        # Frame de Texto - Mais curto e legível
+        texto_frame = ctk.CTkFrame(self.conteudo_alfredo, fg_color="#181818", corner_radius=12, border_width=1, border_color="#333333")
+        texto_frame.pack(fill="x", pady=(0, 20), padx=20)
+
+        self.lbl_texto_alfredo = ctk.CTkLabel(
+            texto_frame, 
             text=texto, 
             font=ctk.CTkFont(size=14), 
-            wraplength=700, 
-            justify="left"
+            wraplength=700,
+            justify="left",
+            padx=20,
+            pady=20,
+            text_color="#EBEBEB"
         )
-        lbl_texto.pack(fill="x", pady=(0, 20), padx=10)
+        self.lbl_texto_alfredo.pack(fill="x")
         
-        # Se houver sugestões, tenta buscar e criar cards
-        if sugestoes:
-            lbl_tit_sug = ctk.CTkLabel(self.conteudo_alfredo, text="SUGESTÕES DO ALFREDO:", font=ctk.CTkFont(size=16, weight="bold"), text_color=self.accent_color)
-            lbl_tit_sug.pack(pady=(10, 10))
+        # Container de Duas Colunas
+        colunas_container = ctk.CTkFrame(self.conteudo_alfredo, fg_color="transparent")
+        colunas_container.pack(fill="both", expand=True, padx=15)
+        
+        # Coluna de Músicas
+        col_musicas = ctk.CTkFrame(colunas_container, fg_color="transparent")
+        col_musicas.pack(side="left", fill="both", expand=True, padx=10)
+        ctk.CTkLabel(col_musicas, text="🎵 MÚSICAS", font=ctk.CTkFont(size=14, weight="bold"), text_color=self.accent_color).pack(pady=(0, 10))
+        
+        for m in musicas[:3]:
+            self.criar_card_alfredo(col_musicas, m, "track")
             
-            for i, item in enumerate(sugestoes[:3]):
-                # Busca rápida no Spotify para pegar imagem e info
-                try:
-                    resultado = self.sp.search(q=item, limit=1, type='track,artist')
-                    
-                    # Tenta pegar como música primeiro
-                    if resultado['tracks']['items']:
-                        track = resultado['tracks']['items'][0]
-                        self.criar_card_simples(i+1, track['name'], track['artists'][0]['name'], track['album']['images'][0]['url'] if track['album']['images'] else None)
-                    elif resultado['artists']['items']:
-                        artist = resultado['artists']['items'][0]
-                        self.criar_card_simples(i+1, artist['name'], "Artista Sugerido", artist['images'][0]['url'] if artist['images'] else None)
-                except:
-                    # Se falhar a busca, cria card apenas com texto
-                    self.criar_card_simples(i+1, item, "Sugestão", None)
+        # Coluna de Artistas
+        col_artistas = ctk.CTkFrame(colunas_container, fg_color="transparent")
+        col_artistas.pack(side="left", fill="both", expand=True, padx=10)
+        ctk.CTkLabel(col_artistas, text="🎵 ARTISTAS", font=ctk.CTkFont(size=14, weight="bold"), text_color=self.accent_color).pack(pady=(0, 10))
+        
+        for a in artistas[:3]:
+            self.criar_card_alfredo(col_artistas, a, "artist")
 
-    def criar_card_simples(self, numero, titulo, subtitulo, url_imagem):
-        card = ctk.CTkFrame(self.conteudo_alfredo, fg_color=self.card_color, corner_radius=8)
-        card.pack(fill="x", pady=5, padx=5)
+    def criar_card_alfredo(self, parent, nome, tipo):
+        # Card com o mesmo estilo do resto do app
+        card = ctk.CTkFrame(parent, fg_color=self.card_color, corner_radius=8, height=80)
+        card.pack(fill="x", pady=5)
+        card.pack_propagate(False)
         
-        ctk.CTkLabel(card, text=f"#{numero}", font=ctk.CTkFont(size=16, weight="bold"), text_color=self.accent_color, width=40).pack(side="left", padx=10)
+        # Placeholder para imagem
+        lbl_img = ctk.CTkLabel(card, text="", width=60, height=60)
+        lbl_img.pack(side="left", padx=10, pady=10)
         
-        # Imagem (simplificada para o card do Alfredo)
-        lbl_img = ctk.CTkLabel(card, text="", width=40, height=40)
-        lbl_img.pack(side="left", padx=5)
+        info_frame = ctk.CTkFrame(card, fg_color="transparent")
+        info_frame.pack(side="left", fill="both", expand=True, pady=15)
         
-        if url_imagem:
-            def carregar():
-                try:
-                    res = requests.get(url_imagem, timeout=3)
-                    img = Image.open(BytesIO(res.content)).resize((40, 40))
-                    ctk_img = ctk.CTkImage(img, size=(40, 40))
-                    self.after(0, lambda: lbl_img.configure(image=ctk_img))
-                except: pass
-            threading.Thread(target=carregar, daemon=True).start()
-            
-        txt_frame = ctk.CTkFrame(card, fg_color="transparent")
-        txt_frame.pack(side="left", fill="x", expand=True, padx=10)
-        ctk.CTkLabel(txt_frame, text=titulo[:40], font=ctk.CTkFont(size=14, weight="bold"), anchor="w").pack(fill="x")
-        ctk.CTkLabel(txt_frame, text=subtitulo[:40], font=ctk.CTkFont(size=12), text_color="#B3B3B3", anchor="w").pack(fill="x")
+        lbl_titulo = ctk.CTkLabel(info_frame, text=nome[:30], font=ctk.CTkFont(size=13, weight="bold"), anchor="w")
+        lbl_titulo.pack(fill="x")
+        
+        lbl_sub = ctk.CTkLabel(info_frame, text="Carregando...", font=ctk.CTkFont(size=11), text_color="#A0A0A0", anchor="w")
+        lbl_sub.pack(fill="x")
+        
+        def carregar_dados_card():
+            try:
+                # Busca no Spotify
+                q = f"artist:\"{nome}\"" if tipo == "artist" else nome
+                res = self.sp.search(q=q, limit=1, type=tipo)
+                
+                items = res['tracks']['items'] if tipo == "track" else res['artists']['items']
+                if items:
+                    item = items[0]
+                    titulo = item['name']
+                    
+                    if tipo == "track":
+                        sub = item['artists'][0]['name']
+                        url_img = item['album']['images'][0]['url'] if item['album']['images'] else None
+                    else:
+                        sub = item['genres'][0].title() if item.get('genres') else "Artista"
+                        url_img = item['images'][0]['url'] if item.get('images') else None
+                    
+                    # Atualiza textos
+                    self.after(0, lambda: lbl_titulo.configure(text=titulo[:30]))
+                    self.after(0, lambda: lbl_sub.configure(text=sub[:35]))
+                    
+                    # Carrega imagem
+                    if url_img:
+                        r = requests.get(url_img, timeout=5)
+                        img_raw = Image.open(BytesIO(r.content)).convert("RGBA")
+                        
+                        # Corte quadrado (PIL)
+                        w, h = img_raw.size
+                        size = min(w, h)
+                        img_crop = img_raw.crop(((w-size)/2, (h-size)/2, (w+size)/2, (h+size)/2)).resize((60, 60))
+                        
+                        ctk_img = ctk.CTkImage(img_crop, size=(60, 60))
+                        self.after(0, lambda: lbl_img.configure(image=ctk_img))
+                else:
+                    self.after(0, lambda: lbl_sub.configure(text="Não encontrado"))
+            except:
+                self.after(0, lambda: lbl_sub.configure(text="Erro ao carregar"))
+                
+        threading.Thread(target=carregar_dados_card, daemon=True).start()
 
     def renderizar_erro_alfredo(self, erro):
         self.limpar_conteudo_alfredo()
