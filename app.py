@@ -2,6 +2,7 @@ import os
 import threading
 import requests
 import spotipy
+import re
 from spotipy.oauth2 import SpotifyOAuth
 from PIL import Image, ImageDraw
 from io import BytesIO
@@ -26,7 +27,7 @@ class SpotifyApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         
-        self.title("Spotify Alfredo")
+        self.title("Spotify Al.fredo")
         self.geometry("1050x700")
         
         self.bg_color = "#121212"
@@ -69,7 +70,7 @@ class SpotifyApp(ctk.CTk):
         # Faz a linha 5 "empurrar" o botão de logout para o fundo
         self.sidebar_frame.grid_rowconfigure(5, weight=1) 
         
-        self.logo_label = ctk.CTkLabel(self.sidebar_frame, text="Spotify Alfredo", font=ctk.CTkFont(size=26, weight="bold"), text_color=self.accent_color)
+        self.logo_label = ctk.CTkLabel(self.sidebar_frame, text="Spotify Al.fredo", font=ctk.CTkFont(size=26, weight="bold"), text_color=self.accent_color)
         self.logo_label.grid(row=0, column=0, padx=20, pady=(30, 20))
         
         self.profile_frame = ctk.CTkFrame(self.sidebar_frame, fg_color="transparent")
@@ -119,7 +120,7 @@ class SpotifyApp(ctk.CTk):
         btn_r = 16
         
         # Cores consistentes
-        self.btn_4_semanas = ctk.CTkButton(self.time_frame, text="4 Semanas", width=btn_w, height=btn_h, font=time_btn_font, corner_radius=btn_r, command=lambda: self.mudar_periodo('short_term'), fg_color=self.accent_color, text_color="#000000", hover_color="#1DB954", border_width=0)
+        self.btn_4_semanas = ctk.CTkButton(self.time_frame, text="1 Mês", width=btn_w, height=btn_h, font=time_btn_font, corner_radius=btn_r, command=lambda: self.mudar_periodo('short_term'), fg_color=self.accent_color, text_color="#000000", hover_color="#1DB954", border_width=0)
         self.btn_4_semanas.pack(side="left", padx=5)
         
         self.btn_6_meses = ctk.CTkButton(self.time_frame, text="6 Meses", width=btn_w, height=btn_h, font=time_btn_font, corner_radius=btn_r, command=lambda: self.mudar_periodo('medium_term'), fg_color="#282828", text_color="#FFFFFF", hover_color="#333333", border_width=0)
@@ -279,10 +280,10 @@ class SpotifyApp(ctk.CTk):
         # 'recentes' não muda com time_range na API do Spotify, mas mantemos por consistência
 
     def mostrar_alfredo(self):
-        self.aba_atual = "alfredo"
+        self.aba_atual = "Al.fredo"
         self.time_frame.pack_forget() # Oculta os botões de tempo
         self.destacar_botao_ativo(self.btn_alfredo)
-        self.title_label.configure(text="Alfredo (IA) - Seu Assistente Musical")
+        self.title_label.configure(text="Al.fredo - Seu Assistente Musical")
         self.limpar_scroll_area()
         
         # Container Principal do Alfredo
@@ -327,7 +328,7 @@ class SpotifyApp(ctk.CTk):
         # Mensagem inicial amigável
         self.msg_inicial = ctk.CTkLabel(
             self.conteudo_alfredo, 
-            text="Olá! Sou o Alfredo.\nEscolha uma das opções acima para eu analisar seu perfil musical!",
+            text="Olá! Sou o Al.fredo.\nEscolha uma das opções acima para eu analisar seu perfil musical!",
             font=ctk.CTkFont(size=16),
             text_color="#B3B3B3",
             pady=40
@@ -343,7 +344,7 @@ class SpotifyApp(ctk.CTk):
 
         # Limpa e mostra que está carregando
         self.limpar_conteudo_alfredo()
-        self.loading_label = ctk.CTkLabel(self.conteudo_alfredo, text="Alfredo está analisando seus dados...", font=ctk.CTkFont(size=16, weight="bold"))
+        self.loading_label = ctk.CTkLabel(self.conteudo_alfredo, text="Al.fredo está analisando seus dados...", font=ctk.CTkFont(size=16, weight="bold"))
         self.loading_label.pack(pady=40)
         
         threading.Thread(target=self.processar_resposta_alfredo, args=(tipo,), daemon=True).start()
@@ -365,48 +366,63 @@ class SpotifyApp(ctk.CTk):
 
             # 2. Prompt focado em extrair texto, músicas e artistas separadamente
             if tipo == "evolucao":
-                instrucao = """
-                Analise a evolução musical do usuário de forma CURTA e DIRETA (máximo 3 frases).
+                instrucao = f"""
+                Analise a evolução musical do usuário de forma detalhada e iconica (entre 2-10 frases).
+                Comente as músicas e artistas que você considera a virada de chave do usuário.
                 Use este formato EXATO:
-                TEXTO: [Sua análise curta]
+                TEXTO: [Sua análise iconica e detalhada]
                 MUSICAS: [Musica 1], [Musica 2], [Musica 3]
                 ARTISTAS: [Artista 1], [Artista 2], [Artista 3]
+
+                DADOS : {', '.join([a['name'] for a in top_artistas_long])}
+                DADOS : {', '.join([a['name'] for a in top_tracks_long])}
+
                 """
             else:
-                instrucao = """
-                Recomende 3 bandas e 3 músicas baseadas no gosto atual. Seja CURTO (máximo 3 frases).
+                instrucao = f"""
+                Recomende 3 bandas e 3 músicas baseadas no gosto atual. Seja iconico (máximo 3 frases).
                 Use este formato EXATO:
-                TEXTO: [Sua explicação curta]
+                TEXTO: [Sua explicação iconica]
                 MUSICAS: [Nome da Música 1], [Nome da Música 2], [Nome da Música 3]
                 ARTISTAS: [Nome da Banda ou Artista 1], [Nome da Banda ou Artista 2], [Nome da Banda ou Artista 3]
+
+                DADOS RECENTES: {', '.join([a['name'] for a in top_artistas_short])}
+                DADOS RECENTES: {', '.join([a['name'] for a in top_tracks_short])}
                 """
 
             contexto = f"""
-            Você é o Alfredo, assistente musical de elite. Seja conciso.
+            Você é o Al.fredo, assistente musical de elite. 
+            Sinta-se livre para falar, os usuários amam ler suas frases iconicas.
+            Use palavras estilizadas que combinem com o histórico musical do usuário (que esta no DADOS abaixo).
+            Lembre de usar a quebra de linha após cada ponto final.
             {instrucao}
-            
-            DADOS RECENTES: {', '.join([a['name'] for a in top_artistas_short])}
             """
-            
-            modelos_tentar = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
+
+
+            modelos_tentar = ['gemini-flash-latest', 'gemini-flash-lite-latest']
             resposta_bruta = None
+            ultimo_erro = "Nenhum modelo respondeu"
             
             for modelo in modelos_tentar:
                 try:
+                    print(f"Tentando Al.fredo com modelo: {modelo}...")
                     response = self.gemini_client.models.generate_content(model=modelo, contents=contexto)
-                    resposta_bruta = response.text
-                    if resposta_bruta: break
-                except: continue
+                    if response and response.text:
+                        resposta_bruta = response.text
+                        print(f"Sucesso com o modelo {modelo}!")
+                        break
+                except Exception as e_modelo:
+                    ultimo_erro = str(e_modelo)
+                    print(f"Erro no modelo {modelo}: {ultimo_erro}")
+                    continue
 
             if not resposta_bruta:
-                raise Exception("Serviço temporariamente indisponível.")
+                raise Exception(f"IA Indisponível: {ultimo_erro}")
 
             # 3. Parsear a resposta de forma mais flexível
             texto_analise = ""
             musicas_sugeridas = []
             artistas_sugeridos = []
-            
-            import re
             
             # Tenta encontrar as seções independentemente da ordem ou de labels "TEXT" vs "TEXTO"
             m_texto = re.search(r"TEXT(?:O)?:?\s*(.*?)(?=MUSICAS:|ARTISTAS:|$)", resposta_bruta, re.S | re.I)
@@ -425,40 +441,70 @@ class SpotifyApp(ctk.CTk):
             self.after(0, lambda: self.renderizar_resultado_alfredo(texto_analise, musicas_sugeridas, artistas_sugeridos))
             
         except Exception as e:
-            self.after(0, lambda: self.renderizar_erro_alfredo(str(e)))
+            msg_erro = str(e)
+            self.after(0, lambda: self.renderizar_erro_alfredo(msg_erro))
 
     def renderizar_resultado_alfredo(self, texto, musicas, artistas):
         self.limpar_conteudo_alfredo()
         
-        # Frame de Texto - Com bordas suaves e padding interno para evitar cortes
+        # Frame de Texto - Com bordas mais arredondadas para um ar mais tranquilo
         texto_frame = ctk.CTkFrame(
             self.conteudo_alfredo, 
             fg_color="#181818", 
-            corner_radius=15, # Leve arredondamento elegante
+            corner_radius=25, 
             border_width=1, 
             border_color="#333333"
         )
-        texto_frame.pack(fill="x", pady=(0, 25), padx=20)
+        texto_frame.pack(fill="x", pady=(0, 25), padx=10) # Reduzido padx de 20 para 10 para o card ocupar mais espaço
 
-        self.lbl_texto_alfredo = ctk.CTkLabel(
-            texto_frame, 
-            text=texto, 
-            font=ctk.CTkFont(size=14), 
-            justify="left",
-            padx=30, # Aumentado para dar mais "ar" ao texto
-            pady=30,
-            text_color="#EBEBEB"
+        # Usando CTKTextbox para permitir formatação de negrito
+        self.txt_alfredo = ctk.CTkTextbox(
+            texto_frame,
+            fg_color="transparent",
+            text_color="#EBEBEB",
+            font=ctk.CTkFont(size=15),
+            wrap="word",
+            border_width=0,
+            padx=15, 
+            pady=15, 
+            activate_scrollbars=False,
+            height=100
         )
-        self.lbl_texto_alfredo.pack(fill="x")
+        self.txt_alfredo.pack(fill="x")
         
-        # Função para ajustar o wraplength dinamicamente e evitar que o texto encoste nas bordas
-        def ajustar_texto(event):
-            # Deixa uma margem de segurança para o wraplength (largura do frame - paddings)
-            novo_wrap = event.width - 80 
-            if novo_wrap > 100:
-                self.lbl_texto_alfredo.configure(wraplength=novo_wrap)
+        # Configura a tag de negrito no widget interno do tkinter
+        self.txt_alfredo._textbox.tag_configure("bold", font=ctk.CTkFont(size=15, weight="bold"))
         
-        texto_frame.bind("<Configure>", ajustar_texto)
+        def inserir_texto_estilizado(widget, raw_text):
+            widget.configure(state="normal")
+            widget.delete("1.0", "end")
+            
+            # Divide o texto pelos asteriscos
+            partes = raw_text.split('*')
+            for i, parte in enumerate(partes):
+                if i % 2 == 1: # Texto que estava entre asteriscos
+                    widget.insert("end", parte, "bold")
+                else:
+                    widget.insert("end", parte)
+            
+            widget.configure(state="disabled")
+            
+            # Ajuste dinâmico de altura baseado no texto inserido (contando linhas quebradas)
+            def ajustar_altura():
+                widget.update_idletasks()
+                # Conta o número real de linhas exibidas (incluindo as quebradas automaticamente)
+                res = widget._textbox.count("1.0", "end", "displaylines")
+                num_linhas = res[0] if res else 1
+                
+                # Estimativa precisa: 22 pixels por linha + 30 de padding total
+                nova_altura = (num_linhas * 22) + 30
+                widget.configure(height=max(80, nova_altura))
+            
+            self.after(50, ajustar_altura)
+            # Recalcula a altura se o card mudar de largura (redimensionamento da janela)
+            widget.bind("<Configure>", lambda e: ajustar_altura())
+
+        inserir_texto_estilizado(self.txt_alfredo, texto)
         
         # Container de Duas Colunas
         colunas_container = ctk.CTkFrame(self.conteudo_alfredo, fg_color="transparent")
