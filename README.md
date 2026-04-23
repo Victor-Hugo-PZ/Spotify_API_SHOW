@@ -1,60 +1,61 @@
-# Spotify Alfredo - Dashboard Musical
+# Spotify Alfredo - Dashboard Musical 🚀
 
-Um dashboard elegante e moderno construído com Python para visualizar suas estatísticas do Spotify em tempo real.
+Um dashboard elegante, moderno e inteligente construído com Python para transformar seus dados do Spotify em uma experiência visual premium.
 
-## 🚀 Funcionalidades
+## 🌟 Funcionalidades Principais
 
-- **Top 10 Artistas**: Veja seus artistas mais ouvidos recentemente, incluindo o número de ouvintes mensais (via Deezer) e o seu principal hit.
-- **Top 10 Músicas**: Lista das suas faixas favoritas com contagem de streams estimada.
-- **Últimas Ouvidas**: Histórico recente do que você andou escutando.
-- **Interface Moderna**: Desenvolvido com `customtkinter` para um visual Dark Mode premium.
-- **Carregamento Assíncrono**: Sistema de threads para garantir que a interface nunca trave enquanto busca dados das APIs.
-- **Segurança**: Gerenciamento de credenciais via variáveis de ambiente (`.env`).
+- **Alfredo (IA)**: Seu assistente musical pessoal. 
+  - **Análise de Evolução**: Uma análise curta e inteligente do seu gosto musical ao longo do tempo.
+  - **Recomendações de Elite**: Sugestões personalizadas de músicas e artistas baseadas no que você ouve.
+  - **Interface Inteligente**: Cards dinâmicos com capas de álbuns, nomes de artistas e gêneros.
+- **Top 10 Artistas**: Visualize seus artistas favoritos com dados de ouvintes mensais e seus maiores sucessos.
+- **Top 10 Músicas**: Ranking das suas faixas mais ouvidas com capas em alta definição.
+- **Últimas Ouvidas**: Histórico recente para você nunca perder aquela música que acabou de tocar.
+- **Interface Premium**: Desenvolvido com `customtkinter` seguindo a identidade visual Dark Mode do Spotify.
+
+## 🎨 Destaques de Design e UX
+
+- **Cards de Alta Fidelidade**: Imagens com corte quadrado perfeito (1:1) e preenchimento total, seguindo o padrão das melhores interfaces de streaming.
+- **Texto Dinâmico**: Sistema de `wraplength` automático que ajusta as análises da IA ao tamanho da janela, evitando cortes indesejados.
+- **Visual Limpo**: Margens e espaçamentos (paddings) calculados para uma leitura confortável e moderna.
+- **Perfil Estilizado**: Foto de perfil arredondada com borda fina e elegante no menu lateral.
+- **Performance**: Carregamento assíncrono (threading) para garantir que a interface permaneça fluida enquanto busca dados.
 
 ## 🛠️ Tecnologias Utilizadas
 
 - **Python 3.x**
-- **Spotipy**: Biblioteca para integração com a API do Spotify.
-- **CustomTkinter**: Interface gráfica moderna e customizável.
-- **Pillow (PIL)**: Processamento de imagens para fotos de perfil e capas.
-- **Deezer API**: Utilizada como proxy para estatísticas de ouvintes e hits.
-- **Python-dotenv**: Gerenciamento de configurações.
+- **Spotipy**: Integração completa com a API Web do Spotify.
+- **Google Gemini AI**: Inteligência artificial de ponta para análise e recomendações.
+- **CustomTkinter**: UI moderna com widgets customizados.
+- **Pillow (PIL)**: Processamento avançado de imagens.
+- **Requests**: Comunicação com APIs externas.
+- **Python-dotenv**: Gestão segura de chaves de API.
 
-## 📋 Pré-requisitos
+## 📋 Configuração e Instalação
 
-Antes de começar, você precisará:
-1. Uma conta no [Spotify for Developers](https://developer.spotify.com/).
-2. Criar um App no dashboard do Spotify para obter seu `Client ID` e `Client Secret`.
-3. Configurar a `Redirect URI` como `http://localhost:8888/callback` (ou a de sua preferência).
+### 1. Requisitos de API
+Você precisará de:
+- Credenciais no [Spotify for Developers](https://developer.spotify.com/).
+- Uma chave de API do [Google AI Studio (Gemini)](https://aistudio.google.com/).
 
-## 🔧 Instalação e Configuração
+### 2. Instalação
+```bash
+pip install customtkinter spotipy pillow python-dotenv requests google-genai
+```
 
-1. Clone o repositório ou baixe os arquivos.
-2. Instale as dependências necessárias:
-   ```bash
-   pip install customtkinter spotipy pillow python-dotenv requests
-   ```
-3. Crie um arquivo `.env` na raiz do projeto com suas credenciais:
-   ```env
-   SPOTIPY_CLIENT_ID='seu_client_id_aqui'
-   SPOTIPY_CLIENT_SECRET='seu_client_secret_aqui'
-   SPOTIPY_REDIRECT_URI='http://localhost:8888/callback'
-   ```
+### 3. Variáveis de Ambiente (.env)
+Crie um arquivo `.env` na raiz:
+```env
+SPOTIPY_CLIENT_ID='seu_id_aqui'
+SPOTIPY_CLIENT_SECRET='seu_secret_aqui'
+SPOTIPY_REDIRECT_URI='http://localhost:8888/callback'
+GEMINI_API_KEY='sua_chave_gemini_aqui'
+```
 
-## 🏃 Como Rodar
-
-Basta executar o arquivo principal:
+## 🏃 Como Iniciar
 ```bash
 python app.py
 ```
 
-## 🎨 Personalização Visual
-
-O projeto conta com:
-- Janela expandida de 1050x700px.
-- Foto de perfil com bordas levemente arredondadas e borda fina branca.
-- Botão de logout estilizado em vermelho suave.
-- Sistema de cores baseado no verde clássico do Spotify (#1DB954).
-
 ---
-Desenvolvido para transformar sua experiência musical em dados visuais. 🎵
+**Spotify Alfredo** - Levando sua análise musical para o próximo nível com Inteligência Artificial. 🎵✨
